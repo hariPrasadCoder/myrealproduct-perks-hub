@@ -223,7 +223,13 @@ docker-compose logs -f
 
 ## How can I deploy this project?
 
+### Deploying with Lovable
+
 Simply open [Lovable](https://lovable.dev/projects/23bd6d2b-1785-412e-8c79-6bb2007708c1) and click on Share -> Publish.
+
+### Deploying with Coolify
+
+See [COOLIFY_DEPLOYMENT.md](./COOLIFY_DEPLOYMENT.md) for detailed instructions on deploying to Coolify, including how to properly configure environment variables.
 
 ## Can I connect a custom domain to my Lovable project?
 
