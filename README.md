@@ -159,6 +159,68 @@ This project is built with:
 - Tailwind CSS
 - Supabase (for backend and authentication)
 
+## Running with Docker
+
+This project includes Docker support for both development and production environments.
+
+### Production Build
+
+Build and run the production container:
+
+```sh
+# Build the Docker image
+docker build -t myrealproduct-perks-hub .
+
+# Run the container
+docker run -p 3000:80 myrealproduct-perks-hub
+```
+
+Or use Docker Compose:
+
+```sh
+# Build and run production container
+docker-compose up app
+
+# Run in detached mode
+docker-compose up -d app
+```
+
+The app will be available at `http://localhost:3000`
+
+### Development Mode
+
+Run the development server in Docker:
+
+```sh
+# Using Docker Compose (recommended)
+docker-compose up app-dev
+
+# Or build and run manually
+docker build -f Dockerfile.dev -t myrealproduct-perks-hub-dev .
+docker run -p 8080:8080 -v $(pwd):/app -v /app/node_modules myrealproduct-perks-hub-dev
+```
+
+The dev server will be available at `http://localhost:8080` with hot-reload enabled.
+
+### Docker Compose Commands
+
+```sh
+# Start production container
+docker-compose up app
+
+# Start development container
+docker-compose up app-dev
+
+# Stop containers
+docker-compose down
+
+# Rebuild containers
+docker-compose build
+
+# View logs
+docker-compose logs -f
+```
+
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/23bd6d2b-1785-412e-8c79-6bb2007708c1) and click on Share -> Publish.
