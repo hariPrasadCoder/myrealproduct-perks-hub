@@ -142,26 +142,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
-      // Get the secret code from environment variable
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-access-code`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session?.access_token}`,
-        },
-        body: JSON.stringify({ code }),
-      });
+      // Read the access code from the database
+      const { data: setting, error: settingError } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'MRP_DEALS_ACCESS_CODE')
+        .single();
 
-      const result = await response.json();
-
-      if (result.success) {
-        await refreshProfile();
+      if (settingError || !setting) {
+        console.error('Error reading access code from database:', settingError);
         toast({
-          title: "Access unlocked!",
-          description: "You now have full access to all deals",
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to verify access code. Please try again.",
         });
-        return { success: true };
-      } else {
+        return { success: false, error: "Failed to read access code" };
+      }
+
+      const correctCode = setting.value?.trim();
+      const userCode = code?.trim();
+
+      // Verify the code matches
+      if (userCode !== correctCode) {
         toast({
           variant: "destructive",
           title: "Invalid code",
@@ -169,7 +171,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         });
         return { success: false, error: "Invalid code" };
       }
+
+      // Code is correct, update the user's profile
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ has_full_access: true })
+        .eq('id', user.id);
+
+      if (updateError) {
+        console.error('Error updating profile:', updateError);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to update access. Please try again.",
+        });
+        return { success: false, error: "Failed to update profile" };
+      }
+
+      // Refresh the profile to get the updated data
+      await refreshProfile();
+      
+      toast({
+        title: "Access unlocked!",
+        description: "You now have full access to all deals",
+      });
+      return { success: true };
     } catch (error) {
+      console.error('Error verifying access code:', error);
       toast({
         variant: "destructive",
         title: "Error",

@@ -28,11 +28,34 @@ export default function Deals() {
         .from("deals")
         .select("*")
         .eq("status", "PUBLISHED")
+        .order("display_order", { ascending: true })
         .order("is_featured", { ascending: false })
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setDeals(data || []);
+      
+      // Sort deals: those with display_order first, then by featured/created_at
+      const sortedDeals = (data || []).sort((a, b) => {
+        // If both have display_order, sort by it
+        if (a.display_order != null && b.display_order != null) {
+          return a.display_order - b.display_order;
+        }
+        // If only a has display_order, it comes first
+        if (a.display_order != null && b.display_order == null) {
+          return -1;
+        }
+        // If only b has display_order, it comes first
+        if (a.display_order == null && b.display_order != null) {
+          return 1;
+        }
+        // If neither has display_order, use featured/created_at
+        if (a.is_featured !== b.is_featured) {
+          return a.is_featured ? -1 : 1;
+        }
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+      
+      setDeals(sortedDeals);
     } catch (error) {
       console.error("Error fetching deals:", error);
     } finally {

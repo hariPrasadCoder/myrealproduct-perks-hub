@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Navbar } from "@/components/Navbar";
-import { Cloud, Zap, GraduationCap, Users, CheckCircle2, TrendingUp } from "lucide-react";
+import { Cloud, Zap, GraduationCap, Users, CheckCircle2, TrendingUp, Rocket, ExternalLink } from "lucide-react";
 
 export default function Landing() {
   return (
@@ -138,6 +138,39 @@ export default function Landing() {
               <CardDescription>
                 Special discounts for students and educational resources
               </CardDescription>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      {/* MyRealProduct Workshop Section */}
+      <section className="container mx-auto px-4 py-20 bg-gradient-to-br from-primary/5 via-background to-primary/5">
+        <div className="max-w-4xl mx-auto">
+          <Card className="border-2 border-primary/20 shadow-lg">
+            <CardContent className="pt-8 pb-8">
+              <div className="text-center space-y-6">
+                <div className="mx-auto w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                  <Rocket className="w-10 h-10 text-primary" />
+                </div>
+                <CardTitle className="text-3xl md:text-4xl font-bold">
+                  Join Our MyRealProduct 4-Week Hands-On AI Workshop
+                </CardTitle>
+                <CardDescription className="text-lg max-w-2xl mx-auto">
+                  Build an end-to-end AI product in 4 weeks. Learn while you build with live classes, mentorship, and hands-on projects. Perfect for Data Analysts, Data Scientists, and anyone ready to break into AI.
+                </CardDescription>
+                <div className="pt-4">
+                  <a 
+                    href="https://myrealproduct.com/" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                  >
+                    <Button size="lg" className="text-lg px-8">
+                      Learn More & Enroll
+                      <ExternalLink className="w-5 h-5 ml-2" />
+                    </Button>
+                  </a>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>

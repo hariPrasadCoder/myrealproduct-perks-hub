@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, Pencil, Trash2, Search } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Search, ArrowUp, ArrowDown, GripVertical } from "lucide-react";
 import { format } from "date-fns";
 
 export default function Admin() {
@@ -29,6 +29,9 @@ export default function Admin() {
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [showOrdering, setShowOrdering] = useState(false);
+  const [orderedDeals, setOrderedDeals] = useState<any[]>([]);
+  const [savingOrder, setSavingOrder] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -42,7 +45,11 @@ export default function Admin() {
     expiry_date: "",
     is_featured: false,
     status: "PUBLISHED",
+    logo_url: "",
   });
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -64,10 +71,32 @@ export default function Admin() {
       const { data, error } = await supabase
         .from("deals")
         .select("*")
+        .order("display_order", { ascending: true })
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setDeals(data || []);
+      
+      // Sort deals: those with display_order first, then by created_at
+      const sortedDeals = (data || []).sort((a, b) => {
+        if (a.display_order != null && b.display_order != null) {
+          return a.display_order - b.display_order;
+        }
+        if (a.display_order != null && b.display_order == null) {
+          return -1;
+        }
+        if (a.display_order == null && b.display_order != null) {
+          return 1;
+        }
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+      
+      setDeals(sortedDeals);
+      // Initialize ordered deals for the ordering interface
+      const dealsWithOrder = sortedDeals.map((deal, index) => ({
+        ...deal,
+        display_order: deal.display_order ?? index + 1,
+      }));
+      setOrderedDeals(dealsWithOrder);
     } catch (error) {
       console.error("Error fetching deals:", error);
       toast({
@@ -92,8 +121,11 @@ export default function Admin() {
       expiry_date: "",
       is_featured: false,
       status: "PUBLISHED",
+      logo_url: "",
     });
     setEditingDeal(null);
+    setLogoFile(null);
+    setLogoPreview(null);
   };
 
   const handleOpenDialog = (deal?: any) => {
@@ -110,18 +142,99 @@ export default function Admin() {
         expiry_date: deal.expiry_date ? format(new Date(deal.expiry_date), "yyyy-MM-dd") : "",
         is_featured: deal.is_featured,
         status: deal.status,
+        logo_url: deal.logo_url || "",
       });
+      setLogoPreview(deal.logo_url || null);
+      setLogoFile(null);
     } else {
       resetForm();
     }
     setShowDealDialog(true);
   };
 
+  const uploadLogo = async (file: File): Promise<string | null> => {
+    try {
+      setUploadingLogo(true);
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `deal-logos/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('deal-logos')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage
+        .from('deal-logos')
+        .getPublicUrl(filePath);
+
+      return data.publicUrl;
+    } catch (error: any) {
+      console.error('Error uploading logo:', error);
+      toast({
+        variant: "destructive",
+        title: "Upload Error",
+        description: error.message || "Failed to upload logo",
+      });
+      return null;
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        toast({
+          variant: "destructive",
+          title: "Invalid File",
+          description: "Please upload an image file",
+        });
+        return;
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          variant: "destructive",
+          title: "File Too Large",
+          description: "Please upload an image smaller than 5MB",
+        });
+        return;
+      }
+
+      setLogoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLogoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    let logoUrl = formData.logo_url;
+
+    // Upload new logo if a file was selected
+    if (logoFile) {
+      const uploadedUrl = await uploadLogo(logoFile);
+      if (!uploadedUrl) {
+        return; // Error already shown in uploadLogo
+      }
+      logoUrl = uploadedUrl;
+    }
+
     const dealData = {
       ...formData,
+      logo_url: logoUrl || null,
       tags: formData.tags.split(",").map(tag => tag.trim()).filter(Boolean),
       expiry_date: formData.expiry_date || null,
       value_highlight: formData.value_highlight || null,
@@ -217,6 +330,61 @@ export default function Admin() {
     }
   };
 
+  const handleMoveDeal = (index: number, direction: "up" | "down") => {
+    const newOrderedDeals = [...orderedDeals];
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    
+    if (targetIndex < 0 || targetIndex >= newOrderedDeals.length) return;
+    
+    // Swap the deals
+    [newOrderedDeals[index], newOrderedDeals[targetIndex]] = 
+      [newOrderedDeals[targetIndex], newOrderedDeals[index]];
+    
+    // Update display_order values
+    newOrderedDeals.forEach((deal, idx) => {
+      deal.display_order = idx + 1;
+    });
+    
+    setOrderedDeals(newOrderedDeals);
+  };
+
+  const handleSaveOrder = async () => {
+    setSavingOrder(true);
+    try {
+      // Update all deals with their new display_order
+      const updates = orderedDeals.map((deal) => ({
+        id: deal.id,
+        display_order: deal.display_order,
+      }));
+
+      // Batch update deals
+      for (const update of updates) {
+        const { error } = await supabase
+          .from("deals")
+          .update({ display_order: update.display_order })
+          .eq("id", update.id);
+
+        if (error) throw error;
+      }
+
+      toast({
+        title: "Order saved",
+        description: "Deal display order has been updated successfully",
+      });
+
+      setShowOrdering(false);
+      fetchDeals();
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to save deal order",
+      });
+    } finally {
+      setSavingOrder(false);
+    }
+  };
+
   const filteredDeals = deals.filter((deal) => {
     const matchesSearch = deal.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          deal.description.toLowerCase().includes(searchQuery.toLowerCase());
@@ -263,6 +431,33 @@ export default function Admin() {
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit} className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="logo">Company Logo</Label>
+                    <div className="flex items-center gap-4">
+                      {logoPreview && (
+                        <div className="relative w-20 h-20 border rounded-lg overflow-hidden">
+                          <img
+                            src={logoPreview}
+                            alt="Logo preview"
+                            className="w-full h-full object-contain"
+                          />
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <Input
+                          id="logo"
+                          type="file"
+                          accept="image/*"
+                          onChange={handleLogoChange}
+                          disabled={uploadingLogo}
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Upload a company logo (max 5MB, PNG/JPG)
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="name">Name *</Label>
                     <Input
@@ -393,7 +588,8 @@ export default function Admin() {
                     >
                       Cancel
                     </Button>
-                    <Button type="submit">
+                    <Button type="submit" disabled={uploadingLogo}>
+                      {uploadingLogo && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                       {editingDeal ? "Update Deal" : "Create Deal"}
                     </Button>
                   </DialogFooter>
@@ -442,6 +638,114 @@ export default function Admin() {
                 </Select>
               </div>
             </CardContent>
+          </Card>
+        </div>
+
+        {/* Deal Ordering Section */}
+        <div className="mb-8">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Deal Display Order</CardTitle>
+                  <CardDescription>
+                    Rearrange the order in which deals appear on the deals page
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  {showOrdering ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setShowOrdering(false);
+                          fetchDeals(); // Reset to original order
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleSaveOrder}
+                        disabled={savingOrder}
+                      >
+                        {savingOrder && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                        Save Order
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setShowOrdering(true);
+                        // Filter to only published deals for ordering
+                        const publishedDeals = deals
+                          .filter((deal) => deal.status === "PUBLISHED")
+                          .map((deal, index) => ({
+                            ...deal,
+                            display_order: deal.display_order ?? index + 1,
+                          }))
+                          .sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+                        setOrderedDeals(publishedDeals);
+                      }}
+                    >
+                      <GripVertical className="w-4 h-4 mr-2" />
+                      Rearrange Deals
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CardHeader>
+            {showOrdering && (
+              <CardContent>
+                <div className="space-y-2">
+                  {orderedDeals.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No published deals to reorder
+                    </p>
+                  ) : (
+                    orderedDeals.map((deal, index) => (
+                      <div
+                        key={deal.id}
+                        className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <GripVertical className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-sm font-medium text-muted-foreground w-8">
+                            #{deal.display_order}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium">{deal.name}</div>
+                          <div className="text-sm text-muted-foreground truncate">
+                            {deal.description}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleMoveDeal(index, "up")}
+                            disabled={index === 0}
+                            className="h-8 w-8 p-0"
+                          >
+                            <ArrowUp className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleMoveDeal(index, "down")}
+                            disabled={index === orderedDeals.length - 1}
+                            className="h-8 w-8 p-0"
+                          >
+                            <ArrowDown className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            )}
           </Card>
         </div>
 

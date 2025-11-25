@@ -12,9 +12,25 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+
+    // Create client for user authentication
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      supabaseUrl,
+      supabaseAnonKey,
+      {
+        auth: {
+          persistSession: false,
+        },
+      }
+    );
+
+    // Create service role client for reading settings (bypasses RLS)
+    const supabaseService = createClient(
+      supabaseUrl,
+      supabaseServiceKey,
       {
         auth: {
           persistSession: false,
@@ -40,18 +56,25 @@ Deno.serve(async (req) => {
     // Get the code from request body
     const { code } = await req.json();
 
-    // Get the correct access code from environment
-    const correctCode = Deno.env.get('MRP_DEALS_ACCESS_CODE');
+    // Read the access code from database
+    const { data: setting, error: settingError } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'MRP_DEALS_ACCESS_CODE')
+      .single();
 
-    if (!correctCode) {
-      console.error('MRP_DEALS_ACCESS_CODE not set');
-      throw new Error('Server configuration error');
+    if (settingError || !setting) {
+      console.error('Error reading access code from database:', settingError);
+      throw new Error('Server configuration error: MRP_DEALS_ACCESS_CODE is not configured. Please set it in the settings table via SQL.');
     }
+
+    const correctCode = setting.value?.trim();
+    const userCode = code?.trim();
 
     console.log('Verifying access code for user:', user.id);
 
-    // Check if code matches
-    if (code === correctCode) {
+    // Check if code matches (case-sensitive, trimmed)
+    if (userCode === correctCode) {
       // Update user profile to grant full access
       const { error: updateError } = await supabase
         .from('profiles')

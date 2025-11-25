@@ -50,6 +50,104 @@ npm run dev
 - Click on "New codespace" to launch a new Codespace environment.
 - Edit files directly within the Codespace and commit and push your changes once you're done.
 
+## Setting up the Access Code
+
+The application uses a secret access code system to unlock premium deals. The access code is stored in the database and verified directly by the frontend - no environment variables or Edge Functions needed!
+
+### Setting the Access Code
+
+1. **Run the migration** (if you haven't already):
+   - The migration `20251126000000_add_settings_table.sql` creates a `settings` table
+   - Run it via your Supabase SQL Editor or migration system
+
+2. **Set the access code** using SQL:
+   ```sql
+   INSERT INTO public.settings (key, value, description)
+   VALUES ('MRP_DEALS_ACCESS_CODE', 'MRP_ROCKS', 'Secret access code to unlock premium deals')
+   ON CONFLICT (key) 
+   DO UPDATE SET 
+     value = EXCLUDED.value,
+     updated_at = NOW();
+   ```
+
+3. **Verify it's set correctly**:
+   ```sql
+   SELECT key, value, LENGTH(value) AS value_length
+   FROM public.settings
+   WHERE key = 'MRP_DEALS_ACCESS_CODE';
+   ```
+
+### How It Works
+
+- The access code is stored in the `public.settings` table in your database
+- The frontend reads the code directly from the database when a user enters it
+- The code is compared client-side, and if it matches, the user's profile is updated
+- **No environment variables needed** - everything is managed via SQL
+- **No restarts required** - changes take effect immediately
+- The RLS policy allows anyone to read the access code (needed for verification)
+
+### Updating the Access Code
+
+To change the access code, simply run:
+
+```sql
+UPDATE public.settings
+SET value = 'YOUR_NEW_CODE_HERE',
+    updated_at = NOW()
+WHERE key = 'MRP_DEALS_ACCESS_CODE';
+```
+
+**Note:** Users who enter the correct access code will have their `has_full_access` flag set to `true` in their profile, unlocking all deals.
+
+See `SET_ACCESS_CODE.md` for more details and troubleshooting.
+
+## Setting up Supabase Storage for Deal Logos
+
+The application uses Supabase Storage to store company logos for deals. To set up the storage bucket:
+
+1. **Go to your Supabase Dashboard**
+   - Navigate to your project at https://supabase.com/dashboard
+   - Select your project
+
+2. **Create the Storage Bucket**
+   - Go to **Storage** in the left sidebar
+   - Click **New bucket**
+   - Name it: `deal-logos`
+   - Make it **Public** (so logos can be displayed on the frontend)
+   - Click **Create bucket**
+
+3. **Set up Storage Policies** (if needed)
+   - Go to **Storage** → **Policies** for the `deal-logos` bucket
+   - Ensure there's a policy that allows:
+     - **Public read access** (for displaying logos)
+     - **Authenticated users with admin privileges can upload** (for admin panel)
+
+   Example policy for public read:
+   ```sql
+   CREATE POLICY "Public Access"
+   ON storage.objects FOR SELECT
+   USING (bucket_id = 'deal-logos');
+   ```
+
+   Example policy for admin upload:
+   ```sql
+   CREATE POLICY "Admins can upload logos"
+   ON storage.objects FOR INSERT
+   WITH CHECK (
+     bucket_id = 'deal-logos' AND
+     (SELECT is_admin FROM public.profiles WHERE id = auth.uid())
+   );
+   ```
+
+4. **Run the Migration**
+   - Make sure to run the migration that adds the `logo_url` column to the deals table:
+   ```bash
+   supabase migration up
+   ```
+   Or apply it manually through the Supabase SQL editor.
+
+**Note:** When creating or editing deals in the admin panel, you can now upload company logos. The logos will be stored in Supabase Storage and displayed on the deal cards.
+
 ## What technologies are used for this project?
 
 This project is built with:
@@ -59,6 +157,7 @@ This project is built with:
 - React
 - shadcn-ui
 - Tailwind CSS
+- Supabase (for backend and authentication)
 
 ## How can I deploy this project?
 

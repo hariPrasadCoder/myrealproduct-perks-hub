@@ -16,6 +16,7 @@ interface DealCardProps {
     value_highlight: string | null;
     expiry_date: string | null;
     is_featured: boolean;
+    logo_url: string | null;
   };
   isLocked: boolean;
   onUnlock: () => void;
@@ -33,27 +34,46 @@ export const DealCard = ({ deal, isLocked, onUnlock }: DealCardProps) => {
   };
 
   return (
-    <Card className={`group hover:shadow-lg transition-all duration-300 ${deal.is_featured ? 'border-primary' : ''} ${isExpired ? 'opacity-60' : ''}`}>
-      <CardHeader>
+    <Card className={`group hover:shadow-lg transition-all duration-300 flex flex-col h-full ${deal.is_featured ? 'border-primary' : ''} ${isExpired ? 'opacity-60' : ''}`}>
+      <CardHeader className="flex-shrink-0">
         <div className="flex items-start justify-between gap-2">
-          <div className="flex-1">
-            <CardTitle className="text-lg mb-2">{deal.name}</CardTitle>
-            <CardDescription className="text-sm">{deal.description}</CardDescription>
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            <div className="w-14 h-14 flex-shrink-0 rounded-lg overflow-hidden bg-muted flex items-center justify-center">
+              {deal.logo_url ? (
+                <img
+                  src={deal.logo_url}
+                  alt={`${deal.name} logo`}
+                  className="w-full h-full object-contain rounded-lg"
+                  loading="lazy"
+                  onError={(e) => {
+                    console.error(`Failed to load logo for ${deal.name}:`, deal.logo_url);
+                    // Hide image on error, container stays for alignment
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+              ) : null}
+            </div>
+            <div className="flex-1 min-w-0">
+              <CardTitle className="text-lg mb-2 line-clamp-2">{deal.name}</CardTitle>
+              <CardDescription className="text-sm line-clamp-3">{deal.description}</CardDescription>
+            </div>
           </div>
-          {isExpired && (
-            <Badge variant="destructive" className="text-xs">
-              Expired
-            </Badge>
-          )}
-          {deal.is_featured && !isExpired && (
-            <Badge variant="default" className="text-xs bg-primary">
-              Featured
-            </Badge>
-          )}
+          <div className="flex flex-col items-end gap-2 flex-shrink-0">
+            {isExpired && (
+              <Badge variant="destructive" className="text-xs">
+                Expired
+              </Badge>
+            )}
+            {deal.is_featured && !isExpired && (
+              <Badge variant="default" className="text-xs bg-primary">
+                Featured
+              </Badge>
+            )}
+          </div>
         </div>
       </CardHeader>
       
-      <CardContent className="space-y-4">
+      <CardContent className="flex flex-col flex-grow space-y-4">
         <div className="flex flex-wrap gap-2">
           <Badge variant="secondary" className="text-xs">
             {deal.category}
@@ -68,24 +88,26 @@ export const DealCard = ({ deal, isLocked, onUnlock }: DealCardProps) => {
           ))}
         </div>
 
-        {deal.value_highlight && (
-          <div className="flex items-center gap-2 text-success">
-            <TrendingUp className="w-4 h-4" />
-            <span className="text-sm font-medium">{deal.value_highlight}</span>
-          </div>
-        )}
+        <div className="flex-grow">
+          {deal.value_highlight && (
+            <div className="flex items-center gap-2 text-green-600 dark:text-green-400 mb-2">
+              <TrendingUp className="w-4 h-4 flex-shrink-0" />
+              <span className="text-sm font-medium">{deal.value_highlight}</span>
+            </div>
+          )}
 
-        {deal.expiry_date && (
-          <div className="flex items-center gap-2 text-muted-foreground text-xs">
-            <Calendar className="w-3 h-3" />
-            <span>Valid until {format(new Date(deal.expiry_date), "MMM d, yyyy")}</span>
-          </div>
-        )}
+          {deal.expiry_date && (
+            <div className="flex items-center gap-2 text-muted-foreground text-xs">
+              <Calendar className="w-3 h-3 flex-shrink-0" />
+              <span>Valid until {format(new Date(deal.expiry_date), "MMM d, yyyy")}</span>
+            </div>
+          )}
+        </div>
 
         <Button 
           onClick={handleClick}
           disabled={isExpired}
-          className="w-full"
+          className="w-full mt-auto"
           variant={isLocked ? "secondary" : "default"}
         >
           {isExpired ? "Deal Expired" : isLocked ? "Unlock to Access" : "Get Deal"}
