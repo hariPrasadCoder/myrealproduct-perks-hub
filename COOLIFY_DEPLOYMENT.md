@@ -18,17 +18,29 @@ The following environment variables are required:
 
 ## Setting Up in Coolify
 
-### Option 1: Using Build Arguments (Recommended)
+### Step-by-Step Configuration
 
 1. **Go to your application settings in Coolify**
-2. **Navigate to "Environment Variables" or "Build Arguments"**
-3. **Add the following build arguments:**
+2. **Navigate to "Environment Variables"**
+3. **Add the following environment variables:**
    - `VITE_SUPABASE_URL` = `https://your-project.supabase.co`
    - `VITE_SUPABASE_PUBLISHABLE_KEY` = `your-anon-key-here`
 
-4. **Make sure these are set as BUILD ARGUMENTS**, not just runtime environment variables
-   - In Coolify, look for a toggle or option to set variables as "Build Args" or "Build Arguments"
-   - If there's a checkbox for "Use as build argument", make sure it's checked
+4. **For each variable, make sure:**
+   - ✅ **"Available at Buildtime"** is **CHECKED** (this is critical!)
+   - ✅ **"Available at Runtime"** can be checked or unchecked (doesn't matter for Vite)
+   - The variable name starts with `VITE_` (required for Vite)
+
+5. **After adding/changing variables:**
+   - **Force a rebuild without cache** in Coolify (this is critical!)
+   - Go to your application → Deployment settings
+   - Look for "Force deploy without using cache" or similar option
+   - Trigger a new deployment
+
+6. **Verify in Build Logs:**
+   - After deployment starts, check the build logs
+   - You should see messages like "✓ VITE_SUPABASE_URL is set" and "✓ VITE_SUPABASE_PUBLISHABLE_KEY is set"
+   - If you see "WARNING: ... is not set!", the variables aren't being passed correctly
 
 ### Option 2: Using Dockerfile ARG Directly
 
@@ -67,10 +79,21 @@ After deployment, you can verify that the environment variables are correctly em
 **Problem:** Environment variables show as `undefined` in the browser console.
 
 **Solutions:**
-1. Make sure variables are prefixed with `VITE_`
-2. Make sure they're set as build arguments, not just runtime environment variables
-3. Rebuild the Docker image after adding/changing variables
-4. Check that Coolify is passing build arguments to the Docker build command
+1. ✅ **Verify "Available at Buildtime" is checked** for each variable in Coolify
+2. ✅ **Force rebuild without cache** - This is often the issue! Coolify may be using a cached build
+3. ✅ Check the build logs in Coolify - look for the debug messages that show if variables are set
+4. ✅ Make sure variable names start with `VITE_` prefix
+5. ✅ After changing variables, always trigger a new deployment (not just restart)
+
+### Build logs show variables are not set
+
+**Problem:** The Docker build logs show "VITE_SUPABASE_URL is set: NO"
+
+**Solutions:**
+1. Double-check that "Available at Buildtime" is checked in Coolify
+2. Verify the variable names are exactly: `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`
+3. Try deleting and re-adding the variables in Coolify
+4. Check if there's a "Use Docker Build Secrets" option that needs to be enabled (though this is usually not needed)
 
 ### Application can't connect to Supabase
 
