@@ -6,11 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2 } from "lucide-react";
 
+type ResetStep = 'email' | 'otp' | 'password';
+
 export default function Login() {
-  const { user, signIn, signUp } = useAuth();
+  const { user, signIn, signUp, resetPassword, verifyOTP, updatePassword } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
@@ -22,6 +25,15 @@ export default function Login() {
   const [signupName, setSignupName] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
+
+  // Forgot password dialog state
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
+  const [resetStep, setResetStep] = useState<ResetStep>('email');
+  const [resetEmail, setResetEmail] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
 
   // Redirect if already logged in
   useEffect(() => {
@@ -54,6 +66,72 @@ export default function Login() {
     if (!error) {
       navigate("/deals");
     }
+  };
+
+  const handleSendOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetLoading(true);
+
+    const { error } = await resetPassword(resetEmail);
+    
+    setResetLoading(false);
+    
+    if (!error) {
+      setResetStep('otp');
+    }
+  };
+
+  const handleVerifyOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetLoading(true);
+
+    const { error } = await verifyOTP(resetEmail, otpCode);
+    
+    setResetLoading(false);
+    
+    if (!error) {
+      setResetStep('password');
+    }
+  };
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (newPassword !== confirmPassword) {
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      return;
+    }
+
+    setResetLoading(true);
+
+    const { error } = await updatePassword(newPassword);
+    
+    setResetLoading(false);
+    
+    if (!error) {
+      setForgotPasswordOpen(false);
+      setResetStep('email');
+      setResetEmail("");
+      setOtpCode("");
+      setNewPassword("");
+      setConfirmPassword("");
+      navigate("/login");
+    }
+  };
+
+  const handleCloseDialog = () => {
+    setForgotPasswordOpen(false);
+    // Reset all state when closing
+    setTimeout(() => {
+      setResetStep('email');
+      setResetEmail("");
+      setOtpCode("");
+      setNewPassword("");
+      setConfirmPassword("");
+    }, 200);
   };
 
   return (
@@ -91,7 +169,16 @@ export default function Login() {
                     </div>
                     
                     <div className="space-y-2">
-                      <Label htmlFor="login-password">Password</Label>
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="login-password">Password</Label>
+                        <button
+                          type="button"
+                          onClick={() => setForgotPasswordOpen(true)}
+                          className="text-sm text-primary hover:underline"
+                        >
+                          Forgot password?
+                        </button>
+                      </div>
                       <Input
                         id="login-password"
                         type="password"
@@ -177,6 +264,149 @@ export default function Login() {
           </Tabs>
         </div>
       </div>
+
+      {/* Forgot Password Dialog */}
+      <Dialog open={forgotPasswordOpen} onOpenChange={handleCloseDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {resetStep === 'email' && 'Reset Password'}
+              {resetStep === 'otp' && 'Enter OTP Code'}
+              {resetStep === 'password' && 'Set New Password'}
+            </DialogTitle>
+            <DialogDescription>
+              {resetStep === 'email' && "Enter your email address and we will send you a 6-digit code."}
+              {resetStep === 'otp' && 'Enter the 6-digit code sent to your email.'}
+              {resetStep === 'password' && 'Enter your new password below.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Step 1: Enter Email */}
+          {resetStep === 'email' && (
+            <form onSubmit={handleSendOTP} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="reset-email">Email</Label>
+                <Input
+                  id="reset-email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleCloseDialog}
+                  disabled={resetLoading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={resetLoading}
+                >
+                  {resetLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  Send Code
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+
+          {/* Step 2: Enter OTP */}
+          {resetStep === 'otp' && (
+            <form onSubmit={handleVerifyOTP} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="otp-code">6-Digit Code</Label>
+                <Input
+                  id="otp-code"
+                  type="text"
+                  placeholder="000000"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  required
+                  maxLength={6}
+                  className="text-center text-2xl tracking-widest"
+                />
+                <p className="text-sm text-muted-foreground">
+                  Check your email for the code sent to {resetEmail}
+                </p>
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setResetStep('email')}
+                  disabled={resetLoading}
+                >
+                  Back
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={resetLoading || otpCode.length !== 6}
+                >
+                  {resetLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  Verify Code
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+
+          {/* Step 3: Enter New Password */}
+          {resetStep === 'password' && (
+            <form onSubmit={handleUpdatePassword} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="new-password">New Password</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  minLength={6}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password">Confirm Password</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  minLength={6}
+                />
+                {confirmPassword && newPassword !== confirmPassword && (
+                  <p className="text-sm text-destructive">
+                    Passwords do not match
+                  </p>
+                )}
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setResetStep('otp')}
+                  disabled={resetLoading}
+                >
+                  Back
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={resetLoading || newPassword !== confirmPassword || newPassword.length < 6}
+                >
+                  {resetLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  Update Password
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

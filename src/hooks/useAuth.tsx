@@ -19,6 +19,9 @@ interface AuthContextType {
   signUp: (email: string, password: string, name: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<{ error: any }>;
+  verifyOTP: (email: string, token: string) => Promise<{ error: any }>;
+  updatePassword: (newPassword: string) => Promise<{ error: any }>;
   verifyAccessCode: (code: string) => Promise<{ success: boolean; error?: string }>;
   refreshProfile: () => Promise<void>;
 }
@@ -136,6 +139,73 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
+  const resetPassword = async (email: string) => {
+    // Send OTP code via email (no redirect URL needed)
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      // Don't set redirectTo - we'll use OTP instead
+    });
+
+    if (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message,
+      });
+    } else {
+      toast({
+        title: "OTP code sent",
+        description: "Check your email for a 6-digit code",
+      });
+    }
+
+    return { error };
+  };
+
+  const verifyOTP = async (email: string, token: string) => {
+    // Verify the OTP token for password recovery
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: 'recovery',
+    });
+
+    if (error) {
+      toast({
+        variant: "destructive",
+        title: "Invalid code",
+        description: error.message,
+      });
+    } else {
+      toast({
+        title: "Code verified",
+        description: "You can now set a new password",
+      });
+    }
+
+    return { error };
+  };
+
+  const updatePassword = async (newPassword: string) => {
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message,
+      });
+    } else {
+      toast({
+        title: "Password updated",
+        description: "Your password has been successfully updated",
+      });
+    }
+
+    return { error };
+  };
+
   const verifyAccessCode = async (code: string): Promise<{ success: boolean; error?: string }> => {
     if (!user) {
       return { success: false, error: "You must be logged in" };
@@ -223,6 +293,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         signUp,
         signIn,
         signOut,
+        resetPassword,
+        verifyOTP,
+        updatePassword,
         verifyAccessCode,
         refreshProfile,
       }}
